@@ -32,19 +32,19 @@ inline fn microkernel(comptime T: type, c: *Matrix(T), a_packed: Matrix(T), b_pa
         .RowMajor => {
             for (0..ni) |i| {
                 for (0..nk) |k| {
-                    var j = 0;
+                    var j: usize = 0;
                     while (j < nj) : (j += vec_len) {
                         switch (nj - j) {
                             inline 1...vec_len => |N| {
                                 // broadcast A scalar
-                                const b_raw_index = b_packed.getRawIndex(.{ k, 0 });
-                                const b_row: @Vector(N, T) = b_packed.data[b_raw_index .. b_raw_index + N].*;
+                                const b_raw_index = b_packed.getRawIndex(.{ k, j });
+                                const b_row: @Vector(N, T) = b_packed.data[b_raw_index..][0..N].*;
                                 const a_splat: @Vector(N, T) = @splat(a_packed.getConst(.{ k, i }));
-                                const c_raw_index = c.getRawIndex(.{ i, 0 });
-                                const c_row: *@Vector(N, T) = &(c.data[c_raw_index .. c_raw_index + N].*);
+                                const c_raw_index = c.getRawIndex(.{ bi + i, bj + j });
+                                const c_row: *@Vector(N, T) = c.data[c_raw_index..][0..N].*;
                                 c_row.* = @mulAdd(@Vector(N, T), a_splat, b_row, c_row.*);
                             },
-                            _ => @panic("what"),
+                            else => @panic("what"),
                         }
                     }
                 }
@@ -59,12 +59,12 @@ inline fn microkernel(comptime T: type, c: *Matrix(T), a_packed: Matrix(T), b_pa
                         switch (ni - i) {
                             inline 1...vec_len => |N| {
                                 // broadcast A scalar
-                                const a_raw_index = a_packed.getRawIndex(.{ k, 0 });
-                                const b_row: @Vector(N, T) = a_packed.data[a_raw_index .. a_raw_index + N].*;
-                                const a_splat: @Vector(N, T) = @splat(a_packed.getConst(.{ k, i }));
-                                const c_raw_index = c.getRawIndex(.{ i, 0 });
-                                const c_row: *@Vector(N, T) = &(c.data[c_raw_index .. c_raw_index + N].*);
-                                c_row.* = @mulAdd(@Vector(N, T), a_splat, b_row, c_row.*);
+                                const a_raw_index = a_packed.getRawIndex(.{ k, j });
+                                const a_column: @Vector(N, T) = a_packed.data[a_raw_index..][0..N].*;
+                                const b_splat: @Vector(N, T) = @splat(b_packed.getConst(.{ k, j }));
+                                const c_raw_index = c.getRawIndex(.{ bi + i, bj + j });
+                                const c_column: *@Vector(N, T) = &(c.data[c_raw_index .. c_raw_index + N].*);
+                                c_column.* = @mulAdd(@Vector(N, T), a_column, b_splat, c_column.*);
                             },
                             _ => @panic("what"),
                         }
@@ -75,7 +75,7 @@ inline fn microkernel(comptime T: type, c: *Matrix(T), a_packed: Matrix(T), b_pa
     }
 }
 
-inline fn pack(comptime T: type, m: Matrix(T), b_row: usize, b_column: usize, dst: Matrix(T)) void {
+inline fn pack(comptime T: type, m: Matrix(T), b_row: usize, b_column: usize, dst: *Matrix(T)) void {
     switch (m.major) {
         .RowMajor => {
             for (0..dst.n_columns) |j| {
@@ -109,7 +109,7 @@ pub fn kernel(comptime T: type, _: anytype, c: *Matrix(T), a: Matrix(T), b: Matr
     // one page per packed submatrix
     const blocksize = 64 / @sizeOf(T);
     var buf: [blocksize * blocksize * 2]T = undefined;
-    var buf_allocator = std.heap.FixedBufferAllocator.init(&buf);
+    var buf_allocator = std.heap.FixedBufferAllocator.init(std.mem.asBytes(&buf));
     const allocator = buf_allocator.threadSafeAllocator();
 
     var a_packed: Matrix(T) = undefined;
@@ -124,7 +124,7 @@ pub fn kernel(comptime T: type, _: anytype, c: *Matrix(T), a: Matrix(T), b: Matr
             var bk: usize = 0;
             while (bk < nk) : (bk += blocksize) {
                 const a_n_columns = @min(blocksize, nk - bk);
-                a_packed = Matrix(T).init(
+                a_packed = try Matrix(T).init(
                     allocator,
                     a_n_rows,
                     a_n_columns,
@@ -132,7 +132,7 @@ pub fn kernel(comptime T: type, _: anytype, c: *Matrix(T), a: Matrix(T), b: Matr
                 );
                 defer a_packed.deinit(allocator);
                 const b_n_rows = @min(blocksize, nk - bk);
-                b_packed = Matrix(T).init(
+                b_packed = try Matrix(T).init(
                     allocator,
                     b_n_rows,
                     b_n_columns,
