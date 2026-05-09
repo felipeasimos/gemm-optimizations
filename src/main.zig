@@ -17,7 +17,7 @@ fn GEMMBenchmarkFunc(comptime T: type, comptime func: anytype) type {
 fn benchmark(io: std.Io) !void {
     const types: []const type = &.{ u64, u32, u16, u8, f64, f32, f16 };
     const sizes: []const usize = &.{ 32, 64, 128, 256, 512, 1024, 2048 };
-    const blocklist: [1][]const u8 = .{"naive"};
+    const blocklist: [2][]const u8 = .{ "naive", "evented" };
     // const blocklist: [][]const u8 = &.{};
 
     var data_dir = try std.Io.Dir.cwd().createDirPathOpen(io, "data", .{});

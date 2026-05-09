@@ -22,7 +22,7 @@ pub fn Matrix(comptime T: type) type {
         pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
             allocator.free(self.data);
         }
-        fn getRawIndex(self: *const @This(), dims: struct { usize, usize }) usize {
+        pub fn getRawIndex(self: *const @This(), dims: struct { usize, usize }) usize {
             if (self.major == .RowMajor) {
                 return dims[0] * self.n_columns + dims[1];
             }
