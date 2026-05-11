@@ -26,6 +26,9 @@ It should always take major into account for the best possible route (I don't wa
 
 ## Experiments
 
-* Debian linux, on a ryzen 7 5700U
+To run experiments, just run `zig build run -Doptimize=ReleaseFast`.
+You can generate the plot with `./plot.sh`.
+Tweak the top of the `benchmark` function in `main.zig` to exclude certain implementations, sizes and datatypes.
 
+* On Debian linux, on a ryzen 7 5700U:
 ![Results here. Multikernel is the best for all options](./results.png)
