@@ -87,12 +87,12 @@ pub fn async(comptime T: type, io: std.Io, c: *Matrix(T), a: Matrix(T), b: Matri
         .RowMajor => {
             if (b.major == .RowMajor) {
                 for (0..ni) |i| {
-                    group.async(io, W.kj, .{ i, nj, nk, c, a, a });
+                    group.async(io, W.kj, .{ i, nj, nk, c, a, b });
                 }
-                // if a doesn't match, well, nothing better to do
+                // if a doesn't match, at least get through each element of C individually
             } else {
                 for (0..ni) |i| {
-                    group.async(io, W.jk, .{ i, nj, nk, c, a, a });
+                    group.async(io, W.jk, .{ i, nj, nk, c, a, b });
                 }
             }
         },
@@ -139,6 +139,7 @@ test async {
     defer b.deinit(std.testing.allocator);
     var c = try Matrix(u32).init(std.testing.allocator, 4, 2, .RowMajor);
     defer c.deinit(std.testing.allocator);
+    c.zero();
     try async(u32, std.testing.io, &c, a, b);
 
     try std.testing.expectEqualDeep(&[_]u32{

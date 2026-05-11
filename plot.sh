@@ -59,7 +59,7 @@ imod(a, b) = a - floor(a/b) * b
 charcode(c) = system("printf '%d' \"'" . method(1)[1:1] . "\"") + 0
 method_hash(n) = sum [j=1:strlen(method(n))] charcode(method(n)[j:j])
 
-point(n)     = 1 + imod(method_hash(n), 14)
+point(n)     = 1 + imod(method_hash(n), 10)
 width(n)     = 1 + imod(method_hash(n), 4)
 pinterval(n) = 2 + imod(method_hash(n), 6)
 # ------------------------------------------------------------
@@ -77,11 +77,11 @@ do for [i=1:words(files)] {
     colors[i] = color(bitsize(i))
     dashes[i] = dash(i)
     points[i] = point(i)
-    widths[i] = width(i)
+    # widths[i] = width(i)
+    widths[i] = 1
     pintervals[i] = pinterval(i)
     basenames[i] = basename(i)
 }
-
 # ------------------------------------------------------------
 # Plot
 # ------------------------------------------------------------
@@ -92,8 +92,8 @@ plot for [i=1:words(files)] \
     with linespoints \
     lc rgb color(bitsize(i)) \
     dt dashes[i] \
-    pt points[i] \
     lw widths[i] \
+    pt points[i] \
     pi 1 \
     title basenames[i]
 

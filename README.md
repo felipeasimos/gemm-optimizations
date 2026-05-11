@@ -15,12 +15,17 @@ It should always take major into account for the best possible route (I don't wa
       * better than async (actual thread pool)
 4. evented
    * calls io.concurrent, but using std.Io.Evented
-      * Evented doesn't follow a thread pool structure, so it is probably worse
+      * Evented doesn't follow a thread pool structure, so it is probably worse than concurrent (curious to see if it would be better than async though)
          * broken until (this is merged)[https://codeberg.org/ziglang/zig/pulls/31764]
-4. kernel (TODO)
+4. kernel
    * macrokernel and microkernel with packing and SIMD, but single threaded and hard-coded block and tile sizes
    * this is more of a implementation checkpoint before going full multithreaded, which means it doesn't necessarily play nice with majors of A and B (since they don't really change anything for the multithreaded kernels code)
-5. multikernel (TODO)
+5. multikernel (TODO column major code)
    * macrokernel and microkernel with packing, SIMD and multithreaded, but hard-coded block and tile sizes
-6. optimal (TODO)
-   * macrokernel and microkernel with packing, SIMD and multithreaded, with calculated block and tile size to better utilize the cache and SIMD registers (calculated using the datatype size)
+      * 4 accumulators for microkernel
+
+## Experiments
+
+* Debian linux, on a ryzen 7 5700U
+
+![Results here. Multikernel is the best for all options](./results.png)

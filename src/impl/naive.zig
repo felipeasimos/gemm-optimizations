@@ -109,6 +109,7 @@ test naive {
     defer b.deinit(std.testing.allocator);
     var c = try Matrix(u32).init(std.testing.allocator, 4, 2, .RowMajor);
     defer c.deinit(std.testing.allocator);
+    c.zero();
     try naive(u32, {}, &c, a, b);
 
     try std.testing.expectEqualDeep(&[_]u32{

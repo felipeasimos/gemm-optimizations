@@ -19,10 +19,9 @@ inline fn addToT(ptr: anytype, acc: anytype) void {
     }
 }
 
-// TODO: fix
 inline fn microkernel(comptime T: type, c: *Matrix(T), a_packed: Matrix(T), b_packed: Matrix(T), bi: usize, bj: usize) void {
-    const ni = a_packed.n_rows;
-    const nj = b_packed.n_columns;
+    const ni = @min(a_packed.n_rows, c.n_rows - bi);
+    const nj = @min(b_packed.n_columns, c.n_columns - bj);
     const nk = a_packed.n_columns;
 
     const vec_len = std.simd.suggestVectorLength(T) orelse 8;
@@ -31,7 +30,8 @@ inline fn microkernel(comptime T: type, c: *Matrix(T), a_packed: Matrix(T), b_pa
         // write horizontally to C
         .RowMajor => {
             for (0..ni) |i| {
-                for (0..nk) |k| {
+                var k: usize = 0;
+                while (k < nk) : (k += 1) {
                     var j: usize = 0;
                     while (j < nj) : (j += vec_len) {
                         switch (nj - j) {
@@ -39,12 +39,31 @@ inline fn microkernel(comptime T: type, c: *Matrix(T), a_packed: Matrix(T), b_pa
                                 // broadcast A scalar
                                 const b_raw_index = b_packed.getRawIndex(.{ k, j });
                                 const b_row: @Vector(N, T) = b_packed.data[b_raw_index..][0..N].*;
-                                const a_splat: @Vector(N, T) = @splat(a_packed.getConst(.{ k, i }));
+                                const a_splat: @Vector(N, T) = @splat(a_packed.getConst(.{ i, k }));
                                 const c_raw_index = c.getRawIndex(.{ bi + i, bj + j });
-                                const c_row: *@Vector(N, T) = c.data[c_raw_index..][0..N].*;
-                                c_row.* = @mulAdd(@Vector(N, T), a_splat, b_row, c_row.*);
+                                const c_row: @Vector(N, T) = c.data[c_raw_index..][0..N].*;
+                                const result = switch (@typeInfo(T)) {
+                                    .int => a_splat *% b_row +% c_row,
+                                    .float => @mulAdd(@Vector(N, T), a_splat, b_row, c_row),
+                                    else => @panic("what"),
+                                };
+                                c.data[c_raw_index..][0..N].* = result;
                             },
-                            else => @panic("what"),
+                            else => {
+                                const N = vec_len;
+                                // broadcast A scalar
+                                const b_raw_index = b_packed.getRawIndex(.{ k, j });
+                                const b_row: @Vector(N, T) = b_packed.data[b_raw_index..][0..N].*;
+                                const a_splat: @Vector(N, T) = @splat(a_packed.getConst(.{ i, k }));
+                                const c_raw_index = c.getRawIndex(.{ bi + i, bj + j });
+                                const c_row: @Vector(N, T) = c.data[c_raw_index..][0..N].*;
+                                const result = switch (@typeInfo(T)) {
+                                    .int => a_splat *% b_row +% c_row,
+                                    .float => @mulAdd(@Vector(N, T), a_splat, b_row, c_row),
+                                    else => @panic("what"),
+                                };
+                                c.data[c_raw_index..][0..N].* = result;
+                            },
                         }
                     }
                 }
@@ -52,21 +71,42 @@ inline fn microkernel(comptime T: type, c: *Matrix(T), a_packed: Matrix(T), b_pa
         },
         // write vertically to C
         .ColumnMajor => {
-            for (0..nk) |k| {
-                for (0..nj) |j| {
-                    var i = 0;
+            var k: usize = 0;
+            while (k < nk) : (k += 1) {
+                var j: usize = 0;
+                while (j < nj) : (j += 1) {
+                    var i: usize = 0;
                     while (i < ni) : (i += vec_len) {
                         switch (ni - i) {
                             inline 1...vec_len => |N| {
-                                // broadcast A scalar
-                                const a_raw_index = a_packed.getRawIndex(.{ k, j });
+                                // broadcast B scalar
+                                const a_raw_index = a_packed.getRawIndex(.{ i, k });
                                 const a_column: @Vector(N, T) = a_packed.data[a_raw_index..][0..N].*;
                                 const b_splat: @Vector(N, T) = @splat(b_packed.getConst(.{ k, j }));
                                 const c_raw_index = c.getRawIndex(.{ bi + i, bj + j });
-                                const c_column: *@Vector(N, T) = &(c.data[c_raw_index .. c_raw_index + N].*);
-                                c_column.* = @mulAdd(@Vector(N, T), a_column, b_splat, c_column.*);
+                                const c_column: @Vector(N, T) = c.data[c_raw_index..][0..N].*;
+                                const result = switch (@typeInfo(T)) {
+                                    .int => b_splat * a_column + c_column,
+                                    .float => @mulAdd(@Vector(N, T), a_column, b_splat, c_column),
+                                    else => @panic("what"),
+                                };
+                                c.data[c_raw_index..][0..N].* = result;
                             },
-                            _ => @panic("what"),
+                            else => {
+                                const N = vec_len;
+                                // broadcast B scalar
+                                const a_raw_index = a_packed.getRawIndex(.{ i, k });
+                                const a_column: @Vector(N, T) = a_packed.data[a_raw_index..][0..N].*;
+                                const b_splat: @Vector(N, T) = @splat(b_packed.getConst(.{ k, j }));
+                                const c_raw_index = c.getRawIndex(.{ bi + i, bj + j });
+                                const c_column: @Vector(N, T) = c.data[c_raw_index..][0..N].*;
+                                const result = switch (@typeInfo(T)) {
+                                    .int => b_splat * a_column + c_column,
+                                    .float => @mulAdd(@Vector(N, T), a_column, b_splat, c_column),
+                                    else => @panic("what"),
+                                };
+                                c.data[c_raw_index..][0..N].* = result;
+                            },
                         }
                     }
                 }
@@ -136,7 +176,7 @@ pub fn kernel(comptime T: type, _: anytype, c: *Matrix(T), a: Matrix(T), b: Matr
                     allocator,
                     b_n_rows,
                     b_n_columns,
-                    .ColumnMajor,
+                    .RowMajor,
                 );
                 defer b_packed.deinit(allocator);
                 pack(T, a, bi, bk, &a_packed);
@@ -172,6 +212,7 @@ test kernel {
     defer b.deinit(std.testing.allocator);
     var c = try Matrix(u32).init(std.testing.allocator, 4, 2, .RowMajor);
     defer c.deinit(std.testing.allocator);
+    c.zero();
     try kernel(u32, std.testing.io, &c, a, b);
 
     try std.testing.expectEqualDeep(&[_]u32{
